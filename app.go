@@ -79,6 +79,7 @@ type View struct {
 }
 
 var (
+	users      = make(map[int]*User)
 	dbConnPool chan *sql.DB
 	baseUrl    *url.URL
 	fmap       = template.FuncMap{
@@ -129,6 +130,21 @@ func main() {
 	}
 
 	r := mux.NewRouter()
+
+	conn, err := sql.Open("mysql", connectionString)
+	defer conn.Close()
+	if err != nil {
+		log.Panicf("Error opening database: %v", err)
+	}
+	rows, _ := conn.Query("SELECT * FROM users")
+	defer rows.Close()
+
+	for rows.Next() {
+		user := &User{}
+		rows.Scan(&user.Id, &user.Username, &user.Password, &user.Salt, &user.LastAccess)
+		users[user.Id] = user
+	}
+
 	r.HandleFunc("/", topHandler)
 	r.HandleFunc("/signin", signinHandler).Methods("GET", "HEAD")
 	r.HandleFunc("/signin", signinPostHandler).Methods("POST")
@@ -176,17 +192,8 @@ func getUser(w http.ResponseWriter, r *http.Request, dbConn *sql.DB, session *se
 	if userId == nil {
 		return nil
 	}
-	user := &User{}
-	rows, err := dbConn.Query("SELECT * FROM users WHERE id=?", userId)
-	if err != nil {
-		serverError(w, err)
-		return nil
-	}
-	if rows.Next() {
-		rows.Scan(&user.Id, &user.Username, &user.Password, &user.Salt, &user.LastAccess)
-		rows.Close()
-	}
-	if user != nil {
+	user, ok := users[userId.(int)]
+	if ok {
 		w.Header().Add("Cache-Control", "private")
 	}
 	return user
@@ -242,8 +249,6 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	memos := make(Memos, 0)
-	stmtUser, err := dbConn.Prepare("SELECT username FROM users WHERE id=?")
-	defer stmtUser.Close()
 	if err != nil {
 		serverError(w, err)
 		return
@@ -251,7 +256,7 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		memo := Memo{}
 		rows.Scan(&memo.Id, &memo.User, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt)
-		stmtUser.QueryRow(memo.User).Scan(&memo.Username)
+		memo.Username = users[memo.User].Username
 		memos = append(memos, &memo)
 	}
 	rows.Close()
@@ -302,16 +307,10 @@ func recentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	memos := make(Memos, 0)
-	stmtUser, err := dbConn.Prepare("SELECT username FROM users WHERE id=?")
-	defer stmtUser.Close()
-	if err != nil {
-		serverError(w, err)
-		return
-	}
 	for rows.Next() {
 		memo := Memo{}
 		rows.Scan(&memo.Id, &memo.User, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt)
-		stmtUser.QueryRow(memo.User).Scan(&memo.Username)
+		memo.Username = users[memo.User].Username
 		memos = append(memos, &memo)
 	}
 	if len(memos) == 0 {
@@ -501,7 +500,7 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rows.Next() {
-		rows.Scan(&memo.Username)
+		rows.Scan(users[memo.User].Username)
 		rows.Close()
 	}
 
