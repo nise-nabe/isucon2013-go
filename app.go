@@ -32,6 +32,7 @@ const (
 	markdownCommand    = "../bin/markdown"
 	dbConnPoolSize     = 10
 	memcachedServer    = "localhost:11211"
+	sessionFile        = "/dev/shm/gorilla"
 	sessionSecret      = "kH<{11qpic*gf0e21YK7YtwyUvE9l<1r>yX8R-Op"
 )
 
@@ -183,7 +184,7 @@ func prepareHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func loadSession(w http.ResponseWriter, r *http.Request) (session *sessions.Session, err error) {
-	store := sessions.NewMemcacheStore(memcachedServer, []byte(sessionSecret))
+	store := sessions.NewFilesystemStore(sessionFile, []byte(sessionSecret))
 	return store.Get(r, sessionName)
 }
 
