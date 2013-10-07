@@ -24,13 +24,13 @@ import (
 )
 
 const (
-	memosPerPage       = 100
-	listenAddr         = ":5000"
-	sessionName        = "isucon_session"
-	tmpDir             = "/tmp/"
-	dbConnPoolSize     = 256
-	sessionFile        = "/dev/shm/gorilla"
-	sessionSecret      = "kH<{11qpic*gf0e21YK7YtwyUvE9l<1r>yX8R-Op"
+	memosPerPage   = 100
+	listenAddr     = ":5000"
+	sessionName    = "isucon_session"
+	tmpDir         = "/tmp/"
+	dbConnPoolSize = 256
+	sessionFile    = "/dev/shm/gorilla"
+	sessionSecret  = "kH<{11qpic*gf0e21YK7YtwyUvE9l<1r>yX8R-Op"
 )
 
 type Config struct {
@@ -77,10 +77,10 @@ type View struct {
 }
 
 var (
-	users      = make(map[int]*User)
-	conn       *sql.DB
-	baseUrl    *url.URL
-	fmap       = template.FuncMap{
+	users   = make(map[int]*User)
+	conn    *sql.DB
+	baseUrl *url.URL
+	fmap    = template.FuncMap{
 		"url_for": func(path string) string {
 			return baseUrl.String() + path
 		},
