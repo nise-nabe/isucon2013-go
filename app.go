@@ -28,7 +28,7 @@ const (
 	listenAddr         = ":5000"
 	sessionName        = "isucon_session"
 	tmpDir             = "/tmp/"
-	dbConnPoolSize     = 10
+	dbConnPoolSize     = 256
 	sessionFile        = "/dev/shm/gorilla"
 	sessionSecret      = "kH<{11qpic*gf0e21YK7YtwyUvE9l<1r>yX8R-Op"
 )
@@ -78,7 +78,7 @@ type View struct {
 
 var (
 	users      = make(map[int]*User)
-	dbConnPool chan *sql.DB
+	conn       *sql.DB
 	baseUrl    *url.URL
 	fmap       = template.FuncMap{
 		"url_for": func(path string) string {
@@ -117,17 +117,14 @@ func main() {
 	)
 	log.Printf("db: %s", connectionString)
 
-	dbConnPool = make(chan *sql.DB, dbConnPoolSize)
-	for i := 0; i < dbConnPoolSize; i++ {
-		conn, err := sql.Open("mysql", connectionString)
-		if err != nil {
-			log.Panicf("Error opening database: %v", err)
-		}
-		dbConnPool <- conn
-		defer conn.Close()
+	var err error
+	conn, err = sql.Open("mysql", connectionString)
+	if err != nil {
+		log.Panic(err)
 	}
+	conn.SetMaxIdleConns(dbConnPoolSize)
 
-	initialize(connectionString)
+	initialize()
 
 	r := mux.NewRouter()
 
@@ -173,7 +170,7 @@ func loadSession(w http.ResponseWriter, r *http.Request) (session *sessions.Sess
 	return store.Get(r, sessionName)
 }
 
-func getUser(w http.ResponseWriter, r *http.Request, dbConn *sql.DB, session *sessions.Session) *User {
+func getUser(w http.ResponseWriter, r *http.Request, session *sessions.Session) *User {
 	userId := session.Values["user_id"]
 	if userId == nil {
 		return nil
@@ -212,14 +209,10 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prepareHandler(w, r)
-	dbConn := <-dbConnPool
-	defer func() {
-		dbConnPool <- dbConn
-	}()
-	user := getUser(w, r, dbConn, session)
+	user := getUser(w, r, session)
 
 	var totalCount int
-	rows, err := dbConn.Query("SELECT count(*) AS c FROM memos WHERE is_private=0")
+	rows, err := conn.Query("SELECT count(*) AS c FROM memos WHERE is_private=0")
 	if err != nil {
 		serverError(w, err)
 		return
@@ -229,7 +222,7 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
-	rows, err = dbConn.Query("SELECT * FROM memos WHERE is_private=0 ORDER BY created_at DESC, id DESC LIMIT ?", memosPerPage)
+	rows, err = conn.Query("SELECT * FROM memos WHERE is_private=0 ORDER BY created_at DESC, id DESC LIMIT ?", memosPerPage)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -268,15 +261,11 @@ func recentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prepareHandler(w, r)
-	dbConn := <-dbConnPool
-	defer func() {
-		dbConnPool <- dbConn
-	}()
-	user := getUser(w, r, dbConn, session)
+	user := getUser(w, r, session)
 	vars := mux.Vars(r)
 	page, _ := strconv.Atoi(vars["page"])
 
-	rows, err := dbConn.Query("SELECT count(*) AS c FROM memos WHERE is_private=0")
+	rows, err := conn.Query("SELECT count(*) AS c FROM memos WHERE is_private=0")
 	if err != nil {
 		serverError(w, err)
 		return
@@ -287,7 +276,7 @@ func recentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
-	rows, err = dbConn.Query("SELECT * FROM memos WHERE is_private=0 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", memosPerPage, memosPerPage*page)
+	rows, err = conn.Query("SELECT * FROM memos WHERE is_private=0 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", memosPerPage, memosPerPage*page)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -325,11 +314,7 @@ func signinHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prepareHandler(w, r)
-	dbConn := <-dbConnPool
-	defer func() {
-		dbConnPool <- dbConn
-	}()
-	user := getUser(w, r, dbConn, session)
+	user := getUser(w, r, session)
 
 	v := &View{
 		User:    user,
@@ -348,15 +333,11 @@ func signinPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prepareHandler(w, r)
-	dbConn := <-dbConnPool
-	defer func() {
-		dbConnPool <- dbConn
-	}()
 
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	user := &User{}
-	rows, err := dbConn.Query("SELECT id, username, password, salt FROM users WHERE username=?", username)
+	rows, err := conn.Query("SELECT id, username, password, salt FROM users WHERE username=?", username)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -375,7 +356,7 @@ func signinPostHandler(w http.ResponseWriter, r *http.Request) {
 				serverError(w, err)
 				return
 			}
-			if _, err := dbConn.Exec("UPDATE users SET last_access=now() WHERE id=?", user.Id); err != nil {
+			if _, err := conn.Exec("UPDATE users SET last_access=now() WHERE id=?", user.Id); err != nil {
 				serverError(w, err)
 				return
 			} else {
@@ -415,17 +396,13 @@ func mypageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prepareHandler(w, r)
-	dbConn := <-dbConnPool
-	defer func() {
-		dbConnPool <- dbConn
-	}()
 
-	user := getUser(w, r, dbConn, session)
+	user := getUser(w, r, session)
 	if user == nil {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
-	rows, err := dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? ORDER BY created_at DESC", user.Id)
+	rows, err := conn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? ORDER BY created_at DESC", user.Id)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -455,13 +432,9 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 	prepareHandler(w, r)
 	vars := mux.Vars(r)
 	memoId := vars["memo_id"]
-	dbConn := <-dbConnPool
-	defer func() {
-		dbConnPool <- dbConn
-	}()
-	user := getUser(w, r, dbConn, session)
+	user := getUser(w, r, session)
 
-	rows, err := dbConn.Query("SELECT id, user, content, is_private, created_at, updated_at FROM memos WHERE id=?", memoId)
+	rows, err := conn.Query("SELECT id, user, content, is_private, created_at, updated_at FROM memos WHERE id=?", memoId)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -480,7 +453,7 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	rows, err = dbConn.Query("SELECT username FROM users WHERE id=?", memo.User)
+	rows, err = conn.Query("SELECT username FROM users WHERE id=?", memo.User)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -496,7 +469,7 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		cond = "AND is_private=0"
 	}
-	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? "+cond+" ORDER BY created_at", memo.User)
+	rows, err = conn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? "+cond+" ORDER BY created_at", memo.User)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -543,12 +516,8 @@ func memoPostHandler(w http.ResponseWriter, r *http.Request) {
 	if antiCSRF(w, r, session) {
 		return
 	}
-	dbConn := <-dbConnPool
-	defer func() {
-		dbConnPool <- dbConn
-	}()
 
-	user := getUser(w, r, dbConn, session)
+	user := getUser(w, r, session)
 	if user == nil {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
@@ -559,7 +528,7 @@ func memoPostHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		isPrivate = 0
 	}
-	result, err := dbConn.Exec(
+	result, err := conn.Exec(
 		"INSERT INTO memos (user, content, is_private, created_at) VALUES (?, ?, ?, now())",
 		user.Id, r.FormValue("content"), isPrivate,
 	)
@@ -571,12 +540,7 @@ func memoPostHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/memo/%d", newId), http.StatusFound)
 }
 
-func initialize(connectionString string) {
-	conn, err := sql.Open("mysql", connectionString)
-	defer conn.Close()
-	if err != nil {
-		log.Panicf("Error opening database: %v", err)
-	}
+func initialize() {
 	rows, _ := conn.Query("SELECT * FROM users")
 	defer rows.Close()
 
