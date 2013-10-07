@@ -130,21 +130,9 @@ func main() {
 		defer conn.Close()
 	}
 
+	initialize(connectionString)
+
 	r := mux.NewRouter()
-
-	conn, err := sql.Open("mysql", connectionString)
-	defer conn.Close()
-	if err != nil {
-		log.Panicf("Error opening database: %v", err)
-	}
-	rows, _ := conn.Query("SELECT * FROM users")
-	defer rows.Close()
-
-	for rows.Next() {
-		user := &User{}
-		rows.Scan(&user.Id, &user.Username, &user.Password, &user.Salt, &user.LastAccess)
-		users[user.Id] = user
-	}
 
 	r.HandleFunc("/", topHandler)
 	r.HandleFunc("/signin", signinHandler).Methods("GET", "HEAD")
@@ -584,4 +572,20 @@ func memoPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	newId, _ := result.LastInsertId()
 	http.Redirect(w, r, fmt.Sprintf("/memo/%d", newId), http.StatusFound)
+}
+
+func initialize(connectionString string) {
+	conn, err := sql.Open("mysql", connectionString)
+	defer conn.Close()
+	if err != nil {
+		log.Panicf("Error opening database: %v", err)
+	}
+	rows, _ := conn.Query("SELECT * FROM users")
+	defer rows.Close()
+
+	for rows.Next() {
+		user := &User{}
+		rows.Scan(&user.Id, &user.Username, &user.Password, &user.Salt, &user.LastAccess)
+		users[user.Id] = user
+	}
 }
