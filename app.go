@@ -24,14 +24,11 @@ import (
 )
 
 const (
-	maxConnectionCount = 256
 	memosPerPage       = 100
 	listenAddr         = ":5000"
 	sessionName        = "isucon_session"
 	tmpDir             = "/tmp/"
-	markdownCommand    = "../bin/markdown"
 	dbConnPoolSize     = 10
-	memcachedServer    = "localhost:11211"
 	sessionFile        = "/dev/shm/gorilla"
 	sessionSecret      = "kH<{11qpic*gf0e21YK7YtwyUvE9l<1r>yX8R-Op"
 )
