@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -520,9 +521,10 @@ func memoPostHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		isPrivate = 0
 	}
+	now := time.Now().Format("2006-01-02 15:04:05")
 	result, err := conn.Exec(
-		"INSERT INTO memos (user, content, is_private, created_at) VALUES (?, ?, ?, now())",
-		user.Id, r.FormValue("content"), isPrivate,
+		"INSERT INTO memos (user, content, is_private, created_at) VALUES (?, ?, ?, ?)",
+		user.Id, r.FormValue("content"), isPrivate, fmt.Sprintf("%s", now),
 	)
 	if err != nil {
 		serverError(w, err)
@@ -532,10 +534,26 @@ func memoPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	if isPrivate == 0 {
 		M.lock.Lock()
-		M.memoCount++
+		memo := &Memo{
+			Id:        int(newId),
+			User:      user.Id,
+			Content:   r.FormValue("content"),
+			IsPrivate: isPrivate,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		addMemo(memo)
 		M.lock.Unlock()
 	}
 	http.Redirect(w, r, fmt.Sprintf("/memo/%d", newId), http.StatusFound)
+}
+
+func addMemo(memo *Memo) {
+	M.memos[memo.Id] = memo
+	if memo.IsPrivate == 0 {
+		M.memoCount++
+	}
 }
 
 func initialize() {
@@ -557,10 +575,7 @@ func initialize() {
 		var memo Memo
 		rows.Scan(&memo.Id, &memo.User, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt)
 		memo.Username = users[memo.User].Username
-		M.memos[memo.Id] = &memo
-		if memo.IsPrivate == 0 {
-			M.memoCount++
-		}
+		addMemo(&memo)
 	}
 	rows.Close()
 }
