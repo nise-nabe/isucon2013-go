@@ -229,7 +229,7 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	user := getUser(w, r, session)
 
 	memos := make(Memos, 0)
-	for _, m := range M.memos{
+	for _, m := range M.memos {
 		if m.IsPrivate == 0 {
 			memos = append(memos, m)
 			if len(memos) >= memosPerPage {
@@ -268,7 +268,7 @@ func recentHandler(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(vars["page"])
 
 	memos := make(Memos, 0)
-	for _, m := range M.memos{
+	for _, m := range M.memos {
 		if m.IsPrivate == 0 {
 			memos = append(memos, m)
 		}
@@ -278,7 +278,7 @@ func recentHandler(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
-	memos = memos[memosPerPage*page:memosPerPage*(1+page)]
+	memos = memos[memosPerPage*page : memosPerPage*(1+page)]
 
 	v := &View{
 		Total:     M.memoCount,
@@ -435,7 +435,7 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 
 	memos := make(Memos, 0)
 	for _, m := range M.memos {
-		if (user != nil && user.Id == memo.User) || m.IsPrivate == 0{
+		if (user != nil && user.Id == memo.User) || m.IsPrivate == 0 {
 			memos = append(memos, m)
 		}
 	}
