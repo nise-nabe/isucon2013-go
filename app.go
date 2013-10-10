@@ -433,7 +433,7 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	memos := make(Memos, 0)
+	memos := make(MemosASC, 0)
 	for _, m := range M.memos {
 		if (user != nil && user.Id == memo.User) || m.IsPrivate == 0 {
 			memos = append(memos, m)
@@ -561,4 +561,18 @@ func (m Memos) Swap(i, j int) {
 
 func (m Memos) Less(i, j int) bool {
 	return m[i].CreatedAt > m[j].CreatedAt
+}
+
+type MemosASC Memos
+
+func (m MemosASC) Len() int {
+	return len(m)
+}
+
+func (m MemosASC) Swap(i, j int) {
+	m[i], m[j] = m[j], m[i]
+}
+
+func (m MemosASC) Less(i, j int) bool {
+	return m[i].CreatedAt < m[j].CreatedAt
 }
