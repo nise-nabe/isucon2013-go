@@ -374,6 +374,9 @@ func signoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func mypageHandler(w http.ResponseWriter, r *http.Request) {
+	M.lock.Lock()
+	defer M.lock.Unlock()
+
 	session, err := loadSession(w, r)
 	if err != nil {
 		serverError(w, err)
