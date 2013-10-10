@@ -540,12 +540,24 @@ func memoPostHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func initialize() {
-	rows, _ := conn.Query("SELECT * FROM users")
-	defer rows.Close()
+	M.lock.Lock()
+	defer M.lock.Unlock()
 
+	rows, _ := conn.Query("SELECT * FROM users")
 	for rows.Next() {
 		user := &User{}
 		rows.Scan(&user.Id, &user.Username, &user.Password, &user.Salt, &user.LastAccess)
 		users[user.Id] = user
 	}
+	rows.Close()
+
+	rows, _ = conn.Query("SELECT id, user, content, is_private, created_at, updated_at FROM memos")
+	for rows.Next() {
+		var memo Memo
+		rows.Scan(&memo.Id, &memo.User, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt)
+		if memo.IsPrivate == 0 {
+			M.memoCount++
+		}
+	}
+	rows.Close()
 }
