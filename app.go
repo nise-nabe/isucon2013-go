@@ -532,27 +532,27 @@ func memoPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	newId, _ := result.LastInsertId()
 
-	if isPrivate == 0 {
-		M.lock.Lock()
-		memo := &Memo{
-			Id:        int(newId),
-			User:      user.Id,
-			Content:   r.FormValue("content"),
-			IsPrivate: isPrivate,
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-
-		addMemo(memo)
-		M.lock.Unlock()
+	M.lock.Lock()
+	memo := &Memo{
+		Id:        int(newId),
+		User:      user.Id,
+		Content:   r.FormValue("content"),
+		IsPrivate: isPrivate,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
+	addMemo(memo)
+	M.lock.Unlock()
+
 	http.Redirect(w, r, fmt.Sprintf("/memo/%d", newId), http.StatusFound)
 }
 
 func addMemo(memo *Memo) {
-	M.memos[memo.Id] = memo
-	if memo.IsPrivate == 0 {
-		M.memoCount++
+	if _, found := M.memos[memo.Id]; !found {
+		M.memos[memo.Id] = memo
+		if memo.IsPrivate == 0 {
+			M.memoCount++
+		}
 	}
 }
 
