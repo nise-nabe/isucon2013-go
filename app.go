@@ -232,12 +232,11 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	for _, m := range M.memos {
 		if m.IsPrivate == 0 {
 			memos = append(memos, m)
-			if len(memos) >= memosPerPage {
-				break
-			}
 		}
 	}
 	sort.Sort(memos)
+	sort.Sort(MemosID(memos))
+	memos = memos[:memosPerPage]
 
 	v := &View{
 		Total:     M.memoCount,
@@ -575,4 +574,18 @@ func (m MemosASC) Swap(i, j int) {
 
 func (m MemosASC) Less(i, j int) bool {
 	return m[i].CreatedAt < m[j].CreatedAt
+}
+
+type MemosID Memos
+
+func (m MemosID) Len() int {
+	return len(m)
+}
+
+func (m MemosID) Swap(i, j int) {
+	m[i], m[j] = m[j], m[i]
+}
+
+func (m MemosID) Less(i, j int) bool {
+	return m[i].Id < m[j].Id
 }
