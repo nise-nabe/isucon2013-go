@@ -490,7 +490,7 @@ func memoPostHandler(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	result, err := conn.Exec(
 		"INSERT INTO memos (user, content, is_private, created_at) VALUES (?, ?, ?, ?)",
-		user.Id, r.FormValue("content"), isPrivate, fmt.Sprintf("%s", now),
+		user.Id, r.FormValue("content"), isPrivate, now,
 	)
 	if err != nil {
 		serverError(w, err)
