@@ -23,9 +23,16 @@ $ sudo cp /home/isucon/webapp/go/init/my.cnf /usr/my.cnf
 $ sudo /etc/init.d/mysql restart
 
 起動設定
-$ sudo vim /etc/supervisord.conf 
+$ sudo vim /etc/supervisord.conf
 $ sudo supervisorctl stop isucon_perl
 $ sudo supervisorctl start isucon_go
 
 起動
-$ sudo isucon3 benchmark --workload=3 --init=/home/isucon/webapp/go/init/init.sh
+$ sudo isucon3 benchmark --workload=10 --init=/home/isucon/webapp/go/init/init.sh
+
+```
+Result:   SUCCESS
+RawScore: 10392.4
+Fails:    0
+Score:    10392.4
+```
