@@ -80,9 +80,11 @@ type View struct {
 var M = struct {
 	lock      sync.RWMutex
 	memoCount int
+	memos     map[int]*Memo
 }{
 	lock:      sync.RWMutex{},
 	memoCount: 0,
+	memos:     make(map[int]*Memo),
 }
 
 var (
@@ -418,6 +420,9 @@ func mypageHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func memoHandler(w http.ResponseWriter, r *http.Request) {
+	M.lock.Lock()
+	defer M.lock.Unlock()
+
 	session, err := loadSession(w, r)
 	if err != nil {
 		serverError(w, err)
@@ -428,16 +433,9 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 	memoId := vars["memo_id"]
 	user := getUser(w, r, session)
 
-	rows, err := conn.Query("SELECT id, user, content, is_private, created_at, updated_at FROM memos WHERE id=?", memoId)
-	if err != nil {
-		serverError(w, err)
-		return
-	}
-	memo := &Memo{}
-	if rows.Next() {
-		rows.Scan(&memo.Id, &memo.User, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt)
-		rows.Close()
-	} else {
+	memoIdInt, _ := strconv.Atoi(memoId)
+	memo, found := M.memos[memoIdInt]
+	if !found {
 		notFound(w)
 		return
 	}
@@ -447,7 +445,7 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	rows, err = conn.Query("SELECT username FROM users WHERE id=?", memo.User)
+	rows, err := conn.Query("SELECT username FROM users WHERE id=?", memo.User)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -553,10 +551,13 @@ func initialize() {
 	rows.Close()
 
 	M.memoCount = 0
+	M.memos = make(map[int]*Memo)
 	rows, _ = conn.Query("SELECT id, user, content, is_private, created_at, updated_at FROM memos")
 	for rows.Next() {
 		var memo Memo
 		rows.Scan(&memo.Id, &memo.User, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt)
+		memo.Username = users[memo.User].Username
+		M.memos[memo.Id] = &memo
 		if memo.IsPrivate == 0 {
 			M.memoCount++
 		}
