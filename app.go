@@ -145,6 +145,7 @@ func main() {
 	r.HandleFunc("/memo/{memo_id}", memoHandler).Methods("GET", "HEAD")
 	r.HandleFunc("/memo", memoPostHandler).Methods("POST")
 	r.HandleFunc("/recent/{page:[0-9]+}", recentHandler)
+	r.HandleFunc("/reset", resetHandler)
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./public/")))
 	http.Handle("/", r)
 	log.Fatal(http.ListenAndServe(listenAddr, nil))
@@ -551,6 +552,7 @@ func initialize() {
 	}
 	rows.Close()
 
+	M.memoCount = 0
 	rows, _ = conn.Query("SELECT id, user, content, is_private, created_at, updated_at FROM memos")
 	for rows.Next() {
 		var memo Memo
@@ -560,4 +562,9 @@ func initialize() {
 		}
 	}
 	rows.Close()
+}
+
+func resetHandler(w http.ResponseWriter, r *http.Request) {
+	initialize()
+	w.Write([]byte("OK"))
 }
