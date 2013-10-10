@@ -228,23 +228,16 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	prepareHandler(w, r)
 	user := getUser(w, r, session)
 
-	rows, err := conn.Query("SELECT * FROM memos WHERE is_private=0 ORDER BY created_at DESC, id DESC LIMIT ?", memosPerPage)
-	if err != nil {
-		serverError(w, err)
-		return
-	}
 	memos := make(Memos, 0)
-	if err != nil {
-		serverError(w, err)
-		return
+	for _, m := range M.memos{
+		if m.IsPrivate == 0 {
+			memos = append(memos, m)
+			if len(memos) >= memosPerPage {
+				break
+			}
+		}
 	}
-	for rows.Next() {
-		memo := Memo{}
-		rows.Scan(&memo.Id, &memo.User, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt)
-		memo.Username = users[memo.User].Username
-		memos = append(memos, &memo)
-	}
-	rows.Close()
+	sort.Sort(memos)
 
 	v := &View{
 		Total:     M.memoCount,
@@ -274,22 +267,18 @@ func recentHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	page, _ := strconv.Atoi(vars["page"])
 
-	rows, err := conn.Query("SELECT * FROM memos WHERE is_private=0 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", memosPerPage, memosPerPage*page)
-	if err != nil {
-		serverError(w, err)
-		return
-	}
 	memos := make(Memos, 0)
-	for rows.Next() {
-		memo := Memo{}
-		rows.Scan(&memo.Id, &memo.User, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt)
-		memo.Username = users[memo.User].Username
-		memos = append(memos, &memo)
+	for _, m := range M.memos{
+		if m.IsPrivate == 0 {
+			memos = append(memos, m)
+		}
 	}
-	if len(memos) == 0 {
+
+	if len(memos) < memosPerPage*page {
 		notFound(w)
 		return
 	}
+	memos = memos[memosPerPage*page:memosPerPage*(1+page)]
 
 	v := &View{
 		Total:     M.memoCount,
@@ -441,24 +430,13 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var cond string
-	if user != nil && user.Id == memo.User {
-		cond = ""
-	} else {
-		cond = "AND is_private=0"
-	}
-	rows, err := conn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? "+cond+" ORDER BY created_at", memo.User)
-	if err != nil {
-		serverError(w, err)
-		return
-	}
 	memos := make(Memos, 0)
-	for rows.Next() {
-		m := Memo{}
-		rows.Scan(&m.Id, &m.Content, &m.IsPrivate, &m.CreatedAt, &m.UpdatedAt)
-		memos = append(memos, &m)
+	for _, m := range M.memos {
+		if (user != nil && user.Id == memo.User) || m.IsPrivate == 0{
+			memos = append(memos, m)
+		}
 	}
-	rows.Close()
+	sort.Sort(memos)
 	var older *Memo
 	var newer *Memo
 	for i, m := range memos {
