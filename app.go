@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -396,17 +397,13 @@ func mypageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
-	rows, err := conn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? ORDER BY created_at DESC", user.Id)
-	if err != nil {
-		serverError(w, err)
-		return
-	}
 	memos := make(Memos, 0)
-	for rows.Next() {
-		memo := Memo{}
-		rows.Scan(&memo.Id, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt)
-		memos = append(memos, &memo)
+	for _, m := range M.memos {
+		if m.User == user.Id {
+			memos = append(memos, m)
+		}
 	}
+	sort.Sort(memos)
 	v := &View{
 		Memos:   &memos,
 		User:    user,
@@ -571,4 +568,16 @@ func initialize() {
 func resetHandler(w http.ResponseWriter, r *http.Request) {
 	initialize()
 	w.Write([]byte("OK"))
+}
+
+func (m Memos) Len() int {
+	return len(m)
+}
+
+func (m Memos) Swap(i, j int) {
+	m[i], m[j] = m[j], m[i]
+}
+
+func (m Memos) Less(i, j int) bool {
+	return m[i].CreatedAt > m[j].CreatedAt
 }
