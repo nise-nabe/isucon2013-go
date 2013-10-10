@@ -425,11 +425,9 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
-	if memo.IsPrivate == 1 {
-		if user == nil || user.Id != memo.User {
-			notFound(w)
-			return
-		}
+	if memo.IsPrivate == 1 && (user == nil || user.Id != memo.User) {
+		notFound(w)
+		return
 	}
 
 	memos := make(MemosASC, 0)
