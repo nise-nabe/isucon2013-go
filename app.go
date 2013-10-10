@@ -430,13 +430,13 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	memos := make(Memos, 0)
+	memos := make(MemosASC, 0)
 	for _, m := range M.memos {
 		if (user != nil && user.Id == memo.User) || m.IsPrivate == 0 {
 			memos = append(memos, m)
 		}
 	}
-	sort.Sort(MemosASC(memos))
+	sort.Sort(memos)
 	var older *Memo
 	var newer *Memo
 	for i, m := range memos {
@@ -447,7 +447,6 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 			if i < len(memos)-1 {
 				newer = memos[i+1]
 			}
-			break
 		}
 	}
 
