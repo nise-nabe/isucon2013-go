@@ -333,17 +333,14 @@ func signinPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := r.FormValue("username")
 	password := r.FormValue("password")
-	user := &User{}
-	rows, err := conn.Query("SELECT id, username, password, salt FROM users WHERE username=?", username)
-	if err != nil {
-		serverError(w, err)
-		return
+	var user *User
+	for _, u := range users {
+		if u.Username == username {
+			user = u
+			break
+		}
 	}
-	if rows.Next() {
-		rows.Scan(&user.Id, &user.Username, &user.Password, &user.Salt)
-	}
-	rows.Close()
-	if user.Id > 0 {
+	if user != nil {
 		h := sha256.New()
 		h.Write([]byte(user.Salt + password))
 		if user.Password == fmt.Sprintf("%x", h.Sum(nil)) {
