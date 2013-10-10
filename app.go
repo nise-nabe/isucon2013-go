@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -74,6 +75,14 @@ type View struct {
 	Older     *Memo
 	Newer     *Memo
 	Session   *sessions.Session
+}
+
+var M = struct {
+	lock      sync.RWMutex
+	memoCount int
+}{
+	lock:      sync.RWMutex{},
+	memoCount: 0,
 }
 
 var (
@@ -203,6 +212,9 @@ func notFound(w http.ResponseWriter) {
 }
 
 func topHandler(w http.ResponseWriter, r *http.Request) {
+	M.lock.Lock()
+	defer M.lock.Unlock()
+
 	session, err := loadSession(w, r)
 	if err != nil {
 		serverError(w, err)
@@ -211,18 +223,7 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	prepareHandler(w, r)
 	user := getUser(w, r, session)
 
-	var totalCount int
-	rows, err := conn.Query("SELECT count(*) AS c FROM memos WHERE is_private=0")
-	if err != nil {
-		serverError(w, err)
-		return
-	}
-	if rows.Next() {
-		rows.Scan(&totalCount)
-	}
-	rows.Close()
-
-	rows, err = conn.Query("SELECT * FROM memos WHERE is_private=0 ORDER BY created_at DESC, id DESC LIMIT ?", memosPerPage)
+	rows, err := conn.Query("SELECT * FROM memos WHERE is_private=0 ORDER BY created_at DESC, id DESC LIMIT ?", memosPerPage)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -241,7 +242,7 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	rows.Close()
 
 	v := &View{
-		Total:     totalCount,
+		Total:     M.memoCount,
 		Page:      0,
 		PageStart: 1,
 		PageEnd:   memosPerPage,
@@ -255,6 +256,9 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func recentHandler(w http.ResponseWriter, r *http.Request) {
+	M.lock.Lock()
+	defer M.lock.Unlock()
+
 	session, err := loadSession(w, r)
 	if err != nil {
 		serverError(w, err)
@@ -265,18 +269,7 @@ func recentHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	page, _ := strconv.Atoi(vars["page"])
 
-	rows, err := conn.Query("SELECT count(*) AS c FROM memos WHERE is_private=0")
-	if err != nil {
-		serverError(w, err)
-		return
-	}
-	var totalCount int
-	if rows.Next() {
-		rows.Scan(&totalCount)
-	}
-	rows.Close()
-
-	rows, err = conn.Query("SELECT * FROM memos WHERE is_private=0 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", memosPerPage, memosPerPage*page)
+	rows, err := conn.Query("SELECT * FROM memos WHERE is_private=0 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", memosPerPage, memosPerPage*page)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -294,7 +287,7 @@ func recentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v := &View{
-		Total:     totalCount,
+		Total:     M.memoCount,
 		Page:      page,
 		PageStart: memosPerPage*page + 1,
 		PageEnd:   memosPerPage * (page + 1),
@@ -537,6 +530,12 @@ func memoPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newId, _ := result.LastInsertId()
+
+	if isPrivate == 0 {
+		M.lock.Lock()
+		M.memoCount++
+		M.lock.Unlock()
+	}
 	http.Redirect(w, r, fmt.Sprintf("/memo/%d", newId), http.StatusFound)
 }
 
